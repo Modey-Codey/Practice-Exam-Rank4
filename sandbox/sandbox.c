@@ -1,53 +1,50 @@
 #include <unistd.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
-#include <signal.h>
-#include <errno.h>
+#include <stdio.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <string.h>
+#include <signal.h>
+#include <errno.h>
+#include <stdbool.h>
 
-void alarm_handler(int sig)
+void	alarm_handler(int sig)
 {
-    (void)sig;  // Unused parameter, avoid compiler warning
+	(void)sig;
 }
 
 int sandbox(void (*f)(void), unsigned int timeout, bool verbose)
 {
-    struct sigaction sa;    // Structure to configure signal handler
-    pid_t pid;              // Will store child process ID
-    int status;             // Will store child's exit status
+	struct sigaction	sa;
+	pid_t				pid;
+	int					status;
 
-    sa.sa_handler = alarm_handler;  // Set our handler function
-    sa.sa_flags = 0;                // No special flags
-    sigemptyset(&sa.sa_mask);       // Don't block any signals during handler
-    sigaction(SIGALRM, &sa, NULL);  // Register the handler for SIGALRM
+	sa.sa_handler = alarm_handler;
+	sa.sa_flags = 0;
+	sigemptyset(&sa.sa_mask);
+	sigaction(SIGALRM, &sa, NULL);
 
-    pid = fork();
-    if (pid == -1)          // Fork failed
-        return (-1);
-    
-    if (pid == 0)
-    {
-        f();        // Execute the test function (might crash, hang, etc.)
-        exit(0);    // If f returns normally, exit with success code
-    }
-    
-    alarm(timeout);
-    
-    if (waitpid(pid, &status, 0) == -1)
-    {
-        if (errno == EINTR)
-        {
-            kill(pid, SIGKILL);         // Send kill signal to child
-            waitpid(pid, NULL, 0);      // Wait to reap child (prevent zombie)
-            if (verbose)
-                printf("Bad function: timed out after %u seconds\n", timeout);
-            return (0);                 // Return 0 = bad function
-        }
-        return (-1);    // Some other error occurred
-    }
+	pid = fork();
+	if (pid == -1)
+		return (-1);
+	if (pid == 0)
+	{
+		f();
+		exit(0);
+	}
+	alarm(timeout);
+	if (waitpid(pid, &status, 0) == -1)
+	{
+		if (errno == EINTR)
+		{
+			kill(pid, SIGKILL);
+			waitpid(pid, NULL, 0);
+			if (verbose)
+				printf("Bad function: timed out after %u seconds\n", timeout);
+			return (0);
+		}
+		return (-1);
+	}
     
     if (WIFEXITED(status))
     {
@@ -73,34 +70,34 @@ int sandbox(void (*f)(void), unsigned int timeout, bool verbose)
     return (-1);
 }
 
-void    good_function(void)
+void    nice_function(void)
 {
-    printf("Good function is running!\n");
+   ;
 }
 
 void    bad_function(void)
 {
-    printf("Bad function is running!\n");
     exit(42);
 }
 
 void    infinite_function(void)
 {
-    printf("Infinite function is running!\n");
     while (1)
         ;
 }
 
+void segfault_function(void)
+{
+    int *p = NULL;
+
+    *p = 42;
+}
+
 int main(void)
 {
-    printf("=== Test 1: Good function ===\n");
-    printf("Result: %d\n\n", sandbox(good_function, 3, true));
-
-    printf("=== Test 2: Bad function ===\n");
-    printf("Result: %d\n\n", sandbox(bad_function, 3, true));
-
-    printf("=== Test 3: Timeout ===\n");
-    printf("Result: %d\n\n", sandbox(infinite_function, 2, true));
-
+    sandbox(nice_function, 3, true);
+	sandbox(bad_function, 3, true);
+	sandbox(bad_function, 3, true);
+    sandbox(segfault_function, 2, true);
     return (0);
 }
